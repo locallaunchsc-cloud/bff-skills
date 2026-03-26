@@ -79,21 +79,11 @@ jobs:
       - name: Add origin section to SKILL.md
         run: |
           SKILL_PATH="${{ steps.detect.outputs.skill_path }}"
-          PR_NUMBER="${{ github.event.pull_request.number }}"
           PR_URL="${{ github.event.pull_request.html_url }}"
-          PR_TITLE="${{ github.event.pull_request.title }}"
           AUTHOR="${{ steps.author.outputs.author }}"
 
-          # Only add origin section if it doesn't already exist
           if ! grep -q "## Origin" "$SKILL_PATH/SKILL.md"; then
-            cat >> "$SKILL_PATH/SKILL.md" << EOF
-
-## Origin
-
-Winner of AIBTC x Bitflow "Skills Pay the Bills" competition.
-Original author: @${AUTHOR}
-Competition PR: ${PR_URL}
-EOF
+            printf '\n## Origin\n\nWinner of AIBTC x Bitflow Skills Pay the Bills competition.\nOriginal author: @%s\nCompetition PR: %s\n' "$AUTHOR" "$PR_URL" >> "$SKILL_PATH/SKILL.md"
           fi
 
       - name: Fork and clone aibtcdev/skills
@@ -145,57 +135,47 @@ EOF
 
           BRANCH="bff-comp/${SKILL_NAME}"
 
-          # Bot is the committer (who pushed), original creator is the author (who wrote it)
-          # GitHub UI shows the author prominently — this is the name on the commit
           git config user.name "BFF Skills Bot"
           git config user.email "bff-skills-bot@bitflow.finance"
 
-          # Create branch
           git checkout -b "$BRANCH"
 
-          # Stage and commit — --author makes the original creator the git author
-          # Git stores author and committer separately:
-          #   author  = the person who wrote the code (original creator)
-          #   committer = the person/bot who applied the commit (BFF Skills Bot)
           git add "$SKILL_NAME/"
+
+          # Write commit message to file to avoid YAML multi-line issues
+          printf 'feat: add %s skill (BFF Skills Comp winner)\n\nSubmitted by @%s' "$SKILL_NAME" "$AUTHOR" > /tmp/commit-msg.txt
+          if [ -n "$AUTHOR_AGENT" ]; then
+            printf ' (%s)' "$AUTHOR_AGENT" >> /tmp/commit-msg.txt
+          fi
+          printf ' via the AIBTC x Bitflow Skills Pay the Bills competition.\n\nCompetition PR: %s\n' "$PR_URL" >> /tmp/commit-msg.txt
+
           git commit \
             --author="${AUTHOR} <${AUTHOR}@users.noreply.github.com>" \
-            -m "feat: add ${SKILL_NAME} skill (BFF Skills Comp winner)
+            -F /tmp/commit-msg.txt
 
-Submitted by @${AUTHOR}${AUTHOR_AGENT:+ (${AUTHOR_AGENT})} via the AIBTC x Bitflow Skills Pay the Bills competition.
-
-Competition PR: ${PR_URL}"
-
-          # Push to the fork (origin = fork, upstream = aibtcdev/skills)
           git push origin "$BRANCH"
 
-          # Create cross-fork PR: from fork's branch → aibtcdev/skills main
+          # Write PR body to file
+          printf '## %s\n\n' "$SKILL_NAME" > /tmp/pr-body.txt
+          printf '**Author:** @%s' "$AUTHOR" >> /tmp/pr-body.txt
+          if [ -n "$AUTHOR_AGENT" ]; then
+            printf ' (%s)' "$AUTHOR_AGENT" >> /tmp/pr-body.txt
+          fi
+          printf '\n**Competition PR:** %s\n' "$PR_URL" >> /tmp/pr-body.txt
+          printf '**PR Title:** %s\n\n---\n\n' "$PR_TITLE" >> /tmp/pr-body.txt
+          printf 'This skill was submitted to the [AIBTC x Bitflow Skills Pay the Bills](https://bff.army/agents.txt) competition, reviewed by judging agents and the human panel, and approved as a daily winner.\n\n' >> /tmp/pr-body.txt
+          printf 'Frontmatter has been converted to the aibtcdev/skills `metadata:` convention. Command paths updated to match this repo root-level skill layout.\n\n' >> /tmp/pr-body.txt
+          printf '### Files\n- `%s/SKILL.md` — Skill definition with AIBTC-format frontmatter\n' "$SKILL_NAME" >> /tmp/pr-body.txt
+          printf '- `%s/AGENT.md` — Agent behavior rules and guardrails\n' "$SKILL_NAME" >> /tmp/pr-body.txt
+          printf '- `%s/%s.ts` — TypeScript implementation\n\n' "$SKILL_NAME" "$SKILL_NAME" >> /tmp/pr-body.txt
+          printf '### Attribution\nOriginal author: **@%s**. The `metadata.author` field in SKILL.md preserves their attribution permanently.\n\n' "$AUTHOR" >> /tmp/pr-body.txt
+          printf '---\n_Automated by [BFF Skills Bot](https://github.com/BitflowFinance/bff-skills) on merge of PR #%s._\n' "$PR_NUMBER" >> /tmp/pr-body.txt
+
           gh pr create \
             --repo aibtcdev/skills \
             --base main \
             --head "${FORK_OWNER}:${BRANCH}" \
             --title "feat: add ${SKILL_NAME} (BFF Skills Comp winner by @${AUTHOR})" \
-            --body "## ${SKILL_NAME}
+            --body-file /tmp/pr-body.txt
 
-**Author:** @${AUTHOR}${AUTHOR_AGENT:+ (${AUTHOR_AGENT})}
-**Competition PR:** ${PR_URL}
-**PR Title:** ${PR_TITLE}
-
----
-
-This skill was submitted to the [AIBTC x Bitflow Skills Pay the Bills](https://bff.army/agents.txt) competition, reviewed by judging agents and the human panel, and approved as a daily winner.
-
-Frontmatter has been converted to the aibtcdev/skills \`metadata:\` convention. Command paths updated to match this repo's root-level skill layout.
-
-### Files
-- \`${SKILL_NAME}/SKILL.md\` — Skill definition with AIBTC-format frontmatter
-- \`${SKILL_NAME}/AGENT.md\` — Agent behavior rules and guardrails
-- \`${SKILL_NAME}/${SKILL_NAME}.ts\` — TypeScript implementation
-
-### Attribution
-Original author: **@${AUTHOR}**. The \`metadata.author\` field in SKILL.md preserves their attribution permanently.
-
----
-_Automated by [BFF Skills Bot](https://github.com/BitflowFinance/bff-skills) on merge of PR #${PR_NUMBER}._"
-
-          echo "✅ PR created to aibtcdev/skills via fork (${FORK_OWNER}/skills)"
+          echo "PR created to aibtcdev/skills via fork (${FORK_OWNER}/skills)"

@@ -1,10 +1,10 @@
 ---
 name: runes-swap-router-agent
 skill: runes-swap-router
-description: "Runes swap routing agent — discovers tradeable Runes, assesses liquidity, quotes optimal routes, and executes swaps on Bitflow's Runes AMM."
+description: "Runes swap routing agent -- discovers tradeable Runes, assesses liquidity, quotes optimal routes, and executes swaps on Bitflow's Runes AMM."
 ---
 
-# Agent Behavior — Runes Swap Router
+# Agent Behavior -- Runes Swap Router
 
 ## Decision order
 
@@ -31,10 +31,23 @@ description: "Runes swap routing agent — discovers tradeable Runes, assesses l
 
 All commands return structured JSON to stdout.
 
+**doctor output:**
+```json
+{
+  "status": "ready | degraded",
+  "checks": {
+    "bitflowApi": "ok | unreachable",
+    "runesAmm": "ok | unavailable",
+    "wallet": "ok | not_checked"
+  },
+  "timestamp": "ISO 8601"
+}
+```
+
 **list-runes output:**
 ```json
 {
-  "runes": [{"symbol": "string", "runeId": "string", "pools": ["string"], "totalLiquidity": "string"}],
+  "runes": [{"symbol": "string", "runeId": "string", "contractId": "string", "pools": ["string"], "totalLiquidity": "string"}],
   "count": "number",
   "timestamp": "ISO 8601"
 }
@@ -50,7 +63,9 @@ All commands return structured JSON to stdout.
   "route": ["string"],
   "priceImpactPct": "number",
   "lpFeePct": "number",
+  "slippageTolerance": "number",
   "minimumReceived": "string",
+  "exchangeRate": "string",
   "timestamp": "ISO 8601"
 }
 ```
@@ -69,6 +84,15 @@ All commands return structured JSON to stdout.
 }
 ```
 
+**get-pools output:**
+```json
+{
+  "pools": [{"poolId": "string", "tokenA": "string", "tokenB": "string", "liquidity": "string", "volume24h": "string", "feePct": "number"}],
+  "count": "number",
+  "timestamp": "ISO 8601"
+}
+```
+
 **assess-liquidity output:**
 ```json
 {
@@ -76,7 +100,10 @@ All commands return structured JSON to stdout.
   "to": "string",
   "amount": "string",
   "estimatedPriceImpact": "number",
+  "poolDepth": "string",
   "recommendation": "proceed | split | abort",
+  "suggestedChunks": "number (present when recommendation is split)",
+  "reasoning": "string",
   "timestamp": "ISO 8601"
 }
 ```
@@ -84,7 +111,7 @@ All commands return structured JSON to stdout.
 ## On error
 
 - Errors are returned as JSON: `{ "error": "descriptive message" }`
-- Do not retry silently — surface the error to the user.
+- Do not retry silently -- surface the error to the user.
 - Common errors: "Rune not found", "Insufficient liquidity", "Price impact too high", "Wallet not connected".
 
 ## On success

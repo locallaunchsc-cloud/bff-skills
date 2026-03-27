@@ -6,7 +6,7 @@
  * Self-contained: uses Bitflow API directly, no external dependencies beyond commander.
  * Specializes in Bitcoin Runes tokens via the Runes AMM (Pontis bridge).
  *
- * Usage: bun run skills/runes-swap-router/runes-swap-router.ts <subcommand> [options]
+ * Usage: bun run runes-swap-router/runes-swap-router.ts <subcommand> [options]
  */
 import { Command } from "commander";
 
@@ -138,7 +138,7 @@ const program = new Command();
 program
   .name("runes-swap-router")
   .description(
-    "Runes-aware swap routing — discover Runes tokens, quote swaps, assess liquidity, and execute trades on Bitflow's Runes AMM."
+    "Runes-aware swap routing -- discover Runes tokens, quote swaps, assess liquidity, and execute trades on Bitflow's Runes AMM."
   )
   .version("0.1.0");
 
@@ -156,7 +156,7 @@ program
 
       // Check Bitflow API
       try {
-        await fetchJson(`${BITFLOW_API}/runes/tokens`);
+        await fetchJson<unknown>(`${BITFLOW_API}/runes/tokens`);
         checks.bitflowApi = "ok";
       } catch {
         checks.bitflowApi = "unreachable";
@@ -164,13 +164,13 @@ program
 
       // Check Runes AMM
       try {
-        await fetchJson(`${BITFLOW_API}/runes/pools`);
+        await fetchJson<unknown>(`${BITFLOW_API}/runes/pools`);
         checks.runesAmm = "ok";
       } catch {
         checks.runesAmm = "unavailable";
       }
 
-      // Wallet check (placeholder — wallet integration is environment-specific)
+      // Wallet check (placeholder -- wallet integration is environment-specific)
       checks.wallet = "not_checked";
 
       const allOk = checks.bitflowApi === "ok" && checks.runesAmm === "ok";
@@ -198,7 +198,6 @@ program
   .action(async () => {
     try {
       const runes = await getAvailableRunes();
-
       printJson({
         runes: runes.map((r) => ({
           symbol: r.symbol,
@@ -225,7 +224,7 @@ program
   )
   .requiredOption("--from <token>", "Source token symbol (Rune name or SIP-10 token)")
   .requiredOption("--to <token>", "Destination token symbol")
-  .requiredOption("--amount <amount>", "Amount of source token to swap")
+  .requiredOption("--amount <value>", "Amount of source token to swap")
   .option("--slippage <pct>", "Slippage tolerance in percent", String(DEFAULT_SLIPPAGE))
   .action(async (opts: { from: string; to: string; amount: string; slippage: string }) => {
     try {
@@ -256,12 +255,13 @@ program
 program
   .command("swap")
   .description(
-    "Executes a Runes swap through the best available route. Requires wallet."
+    "Executes a Runes swap through the best available route. Requires wallet and explicit --confirm flag."
   )
   .requiredOption("--from <token>", "Source token symbol")
   .requiredOption("--to <token>", "Destination token symbol")
-  .requiredOption("--amount <amount>", "Amount to swap")
+  .requiredOption("--amount <value>", "Amount to swap")
   .option("--slippage <pct>", "Slippage tolerance percent", String(DEFAULT_SLIPPAGE))
+  .option("--confirm", "Explicit confirmation to execute the swap", false)
   .option("--force", "Override price impact safety check", false)
   .action(
     async (opts: {
@@ -269,9 +269,17 @@ program
       to: string;
       amount: string;
       slippage: string;
+      confirm: boolean;
       force: boolean;
     }) => {
       try {
+        // Require explicit confirmation
+        if (!opts.confirm) {
+          throw new Error(
+            "Swap requires explicit confirmation. Use --confirm flag to execute."
+          );
+        }
+
         const slippage = Number(opts.slippage);
 
         // Pre-flight: check price impact
@@ -318,7 +326,6 @@ program
   .action(async () => {
     try {
       const pools = await getRunesPools();
-
       printJson({
         pools: pools.map((p) => ({
           poolId: p.poolId,
@@ -346,7 +353,7 @@ program
   )
   .requiredOption("--from <token>", "Source token symbol")
   .requiredOption("--to <token>", "Destination token symbol")
-  .requiredOption("--amount <amount>", "Amount to assess")
+  .requiredOption("--amount <value>", "Amount to assess")
   .action(async (opts: { from: string; to: string; amount: string }) => {
     try {
       const assessment = await getLiquidityDepth(opts.from, opts.to, opts.amount);

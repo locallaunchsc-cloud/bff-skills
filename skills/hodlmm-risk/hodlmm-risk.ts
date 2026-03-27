@@ -51,13 +51,13 @@ async function fetchJson<T>(url: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 async function getHodlmmPool(poolId: string): Promise<HodlmmPoolInfo> {
-  return fetchJson<HodlmmPoolInfo>(`${BITFLOW_API}/hodlmm/pools/${poolId}`);
+  return fetchJson(`${BITFLOW_API}/hodlmm/pools/${encodeURIComponent(poolId)}`);
 }
 async function getHodlmmPoolBins(poolId: string): Promise<HodlmmBinListResponse> {
-  return fetchJson<HodlmmBinListResponse>(`${BITFLOW_API}/hodlmm/pools/${poolId}/bins`);
+  return fetchJson(`${BITFLOW_API}/hodlmm/pools/${encodeURIComponent(poolId)}/bins`);
 }
 async function getHodlmmUserPositionBins(address: string, poolId: string): Promise<HodlmmBinListResponse> {
-  return fetchJson<HodlmmBinListResponse>(`${BITFLOW_API}/hodlmm/pools/${poolId}/positions/${address}`);
+  return fetchJson(`${BITFLOW_API}/hodlmm/pools/${encodeURIComponent(poolId)}/positions/${encodeURIComponent(address)}`);
 }
 // ---------------------------------------------------------------------------
 // Helpers
@@ -67,7 +67,7 @@ function printJson(data: Record<string, unknown>): void {
 }
 function handleError(error: unknown): void {
   const message = error instanceof Error ? error.message : String(error);
-      const output = { error: message };
+  const output = { error: message };
   console.log(JSON.stringify(output, null, 2));
   process.exit(1);
 }
@@ -98,7 +98,13 @@ function computePoolRiskMetrics(
   const binIds = nonEmptyBins.map((b) => b.bin_id);
   const minBin = Math.min(...binIds);
   const maxBin = Math.max(...binIds);
-  const binSpread = totalBins > 0 ? (maxBin - minBin) / Math.max(totalBins, 1) : 0;
+  // Normalize by totalBins (all bins, including empty) intentionally.
+  // This keeps the metric bounded 0–1 relative to the pool's full bin capacity,
+  // making cross-pool comparisons consistent regardless of pool size.
+  // Alternative: normalizing by nonEmptyBins.length would be more sensitive
+  // to sparse liquidity but less stable across pools.
+  const binSpread =
+    totalBins > 0 ? (maxBin - minBin) / Math.max(totalBins, 1) : 0;
   let totalX = 0;
   let totalY = 0;
   for (const bin of bins) {
@@ -140,7 +146,11 @@ function computeSignals(metrics: RiskMetrics) {
   const recommendedBinWidth =
     metrics.regime === "calm" ? 3 : metrics.regime === "elevated" ? 7 : 15;
   const maxExposurePct =
-    metrics.regime === "calm" ? 0.25 : metrics.regime === "elevated" ? 0.1 : 0.0;
+    metrics.regime === "calm"
+      ? 0.25
+      : metrics.regime === "elevated"
+        ? 0.1
+        : 0.0;
   return { safeToAddLiquidity, recommendedBinWidth, maxExposurePct };
 }
 // ---------------------------------------------------------------------------
@@ -226,8 +236,8 @@ program
         positionBins.length === 1
           ? "high"
           : positionBins.length <= 3
-          ? "medium"
-          : "low";
+            ? "medium"
+            : "low";
       const impermanentLossEstimatePct = Number(
         (driftScore * 0.08).toFixed(2)
       );

@@ -9,7 +9,7 @@
  *
  * HODLMM bonus eligible: Yes — directly manages HODLMM positions.
  *
- * Usage: bun run skills/hodlmm-rebalancer/hodlmm-rebalancer.ts <subcommand> [options]
+ * Usage: bun run hodlmm-rebalancer/hodlmm-rebalancer.ts <subcommand> [options]
  */
 
 // -- Constants
@@ -130,7 +130,7 @@ async function getSbtcBalance(address: string): Promise<number> {
   return data.fungible_tokens?.[ftKey]?.balance ? parseInt(data.fungible_tokens[ftKey].balance, 10) : 0;
 }
 
-// -- Risk computation (reuses hodlmm-risk logic)
+// -- Risk computation (duplicated from hodlmm-risk for self-containment; keep in sync)
 function classifyRegime(score: number): "calm" | "elevated" | "crisis" {
   if (score <= 30) return "calm";
   if (score <= 60) return "elevated";
@@ -206,9 +206,27 @@ function buildRebalancePlan(
   return { staleBins, targetBins, totalWithdrawX, totalWithdrawY, estimatedGasUstx, projectedDailyFeeBps };
 }
 
-// -- Cooldown tracking (in-memory for single session)
-let lastRebalanceTimestamp: Record<string, number> = {};
+// -- Cooldown persistence (file-based to survive across CLI invocations)
+import { existsSync, readFileSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 
+const COOLDOWN_FILE = join(tmpdir(), ".hodlmm-rebalancer-cooldown.json");
+
+function readCooldowns(): Record<string, number> {
+  try {
+    if (existsSync(COOLDOWN_FILE)) {
+      return JSON.parse(readFileSync(COOLDOWN_FILE, "utf-8"));
+    }
+  } catch { /* ignore corrupt file */ }
+  return {};
+}
+
+function writeCooldown(key: string, timestamp: number): void {
+  const data = readCooldowns();
+  data[key] = timestamp;
+  writeFileSync(COOLDOWN_FILE, JSON.stringify(data), "utf-8");
+}
 // -- Commands
 async function doctor(): Promise<void> {
   const address = getWalletAddress();
@@ -335,7 +353,7 @@ async function runExecute(
   }
   // Cooldown check
   const cooldownKey = `${poolId}:${address}`;
-  const lastRun = lastRebalanceTimestamp[cooldownKey] || 0;
+  const lastRun = readCooldowns()[cooldownKey] || 0;
   if (Date.now() - lastRun < COOLDOWN_MS) {
     const waitMin = Math.ceil((COOLDOWN_MS - (Date.now() - lastRun)) / 60_000);
     blocked("cooldown", `Rebalance cooldown active. Wait ${waitMin} more minutes.`, "Wait for cooldown to expire");
@@ -373,7 +391,7 @@ async function runExecute(
     return;
   }
   // Output MCP commands for agent framework
-  lastRebalanceTimestamp[cooldownKey] = Date.now();
+  writeCooldown(cooldownKey, Date.now());
   output({
     status: "success",
     action: "Execute rebalance via MCP tools: withdraw from stale bins, deposit into target bins.",

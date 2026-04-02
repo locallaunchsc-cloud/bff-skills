@@ -90,8 +90,9 @@ async function getPoolHolders(
         user_liquidity: Number(b.user_liquidity ?? 0),
       })),
     }));
-  } catch {
-    // Fallback: fetch from Hiro contract events
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(JSON.stringify({ warning: `getPoolHolders failed: ${msg}` }));
     return [];
   }
 }
@@ -101,14 +102,14 @@ function classifyWhaleSignal(
   previous: number | null,
   threshold: number
 ): WhaleAlert["signal"] | null {
+  if (previous !== null && previous >= threshold && current < threshold) return "WHALE_EXIT";
   if (current < threshold) return null;
   if (previous === null) return "WHALE_ENTRY";
   if (previous === 0) return "WHALE_ENTRY";
   const changePct = ((current - previous) / previous) * 100;
   if (changePct > 20) return "WHALE_INCREASE";
   if (changePct < -20) return "WHALE_DECREASE";
-  if (current === 0 && previous > 0) return "WHALE_EXIT";
-  return null;
+return null;
 }
 
 // ---------------------------------------------------------------------------

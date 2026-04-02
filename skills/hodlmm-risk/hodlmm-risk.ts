@@ -6,7 +6,7 @@
  * Self-contained: uses Bitflow API directly, no external dependencies beyond commander.
  * HODLMM bonus eligible: Yes — directly monitors HODLMM pool risk.
  *
- * Usage: bun run skills/hodlmm-risk/hodlmm-risk.ts <subcommand> [options]
+ * Usage: bun run hodlmm-risk/hodlmm-risk.ts <subcommand> [options]
  */
 import { Command } from "commander";
 // ---------------------------------------------------------------------------

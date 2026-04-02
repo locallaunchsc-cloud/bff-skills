@@ -95,8 +95,8 @@ async function executeSwap(
 ): Promise<{ txId: string; expectedOut: string; route: string[] }> {
   const res = await fetch(`${BITFLOW_API}/runes/swap`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to, amount, slippage }),
+    headers: { "Content-Type": "application/json", "X-Wallet-Address": getWalletAddress() },
+    body: JSON.stringify({ from, to, amount, slippage, senderAddress: getWalletAddress() }),
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`Swap API error ${res.status}: ${res.statusText}`);
@@ -128,6 +128,14 @@ function handleError(error: unknown): void {
   const output = { error: message };
   console.log(JSON.stringify(output, null, 2));
   process.exit(1);
+}
+
+function getWalletAddress(): string {
+  const addr = process.env.STACKS_ADDRESS || process.env.STX_ADDRESS;
+  if (!addr) {
+    handleError(new Error("No wallet address found. Set STACKS_ADDRESS or STX_ADDRESS env var."));
+  }
+  return addr!;
 }
 
 // ---------------------------------------------------------------------------
@@ -171,7 +179,7 @@ program
       }
 
       // Wallet check (placeholder -- wallet integration is environment-specific)
-      checks.wallet = "not_checked";
+      const walletAddr = process.env.STACKS_ADDRESS || process.env.STX_ADDRESS; checks.wallet = walletAddr ? "configured" : "missing";
 
       const allOk = checks.bitflowApi === "ok" && checks.runesAmm === "ok";
 

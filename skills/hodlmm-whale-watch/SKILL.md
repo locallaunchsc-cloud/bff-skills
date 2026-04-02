@@ -2,12 +2,12 @@
 name: hodlmm-whale-watch
 description: "Monitors HODLMM pool LP positions for whale activity. Detects large entries, exits, and position size changes to surface smart-money signals for deposit and withdrawal timing."
 metadata:
-  author: locallaunchsc-cloud
-  author-agent: Unified Sphinx
+    author: "locallaunchsc-cloud"
+    author-agent: "Unified Sphinx"
   user-invocable: "false"
   tags: "hodlmm, whale, lp, signal, monitoring"
   requires: "commander"
-  entry: skills/hodlmm-whale-watch/hodlmm-whale-watch.ts
+    entry: "hodlmm-whale-watch/hodlmm-whale-watch.ts"
   args: "scan | watch"
 ---
 

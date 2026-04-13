@@ -51,13 +51,13 @@ async function fetchJson<T>(url: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 async function getHodlmmPool(poolId: string): Promise<HodlmmPoolInfo> {
-  return fetchJson<HodlmmPoolInfo>(`${BITFLOW_API}/hodlmm/pools/${poolId}`);
+  return fetchJson<HodlmmPoolInfo>(`${BITFLOW_API}/hodlmm/pools/${encodeURIComponent(poolId)}`);
 }
 async function getHodlmmPoolBins(poolId: string): Promise<HodlmmBinListResponse> {
-  return fetchJson<HodlmmBinListResponse>(`${BITFLOW_API}/hodlmm/pools/${poolId}/bins`);
+  return fetchJson<HodlmmBinListResponse>(`${BITFLOW_API}/hodlmm/pools/${encodeURIComponent(poolId)}/bins`);
 }
 async function getHodlmmUserPositionBins(address: string, poolId: string): Promise<HodlmmBinListResponse> {
-  return fetchJson<HodlmmBinListResponse>(`${BITFLOW_API}/hodlmm/pools/${poolId}/positions/${address}`);
+  return fetchJson<HodlmmBinListResponse>(`${BITFLOW_API}/hodlmm/pools/${encodeURIComponent(poolId)}/positions/${encodeURIComponent(address)}`);
 }
 // ---------------------------------------------------------------------------
 // Helpers

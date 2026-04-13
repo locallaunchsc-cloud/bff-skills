@@ -1,91 +1,31 @@
 ---
 name: yield-compass-agent
 skill: yield-compass
-description: "Cross-protocol yield comparison and allocation agent — queries Bitflow HODLMM, Zest Protocol, and Stacks stacking to recommend where idle capital earns the most. Read-only; no wallet required."
+description: "Read-only agent that compares live APY across Bitflow HODLMM, Zest sBTC lending, and Stacks stacking to recommend optimal new-capital allocation."
 ---
 
 # Agent Behavior — Yield Compass
 
 ## Decision order
-
-1. Call `compare-yields` to get current APY across all protocols.
-2. Review the `riskRegime` for each HODLMM pool. If `crisis`, exclude HODLMM from allocation.
-3. If the user has specified amounts, call `best-allocation` with their `--amount-sbtc` and `--amount-stx`.
-4. Present the ranked yield list and allocation recommendation to the user.
-5. If the user wants detail on a specific protocol, call `protocol-snapshot --protocol <name>`.
-6. Never auto-execute deposits or withdrawals — this skill is advisory only.
-7. If APIs are unreachable for any protocol, exclude that protocol from the comparison and note it in the response.
+1. Run `doctor` first. If any data source is unreachable, surface the blocker and stop.
+2. Run `compare-yields` to get current APY ranking across all three protocols.
+3. If the user asks for a recommendation, run `best-allocation`.
+4. If the user wants detail on a single protocol, run `protocol-snapshot --protocol <name>`.
+5. Parse JSON output and route on the `status` field.
 
 ## Guardrails
+- Never proceed past a `doctor` failure without explicit user confirmation.
+- Never interpret `best-allocation` output as an instruction to rebalance existing positions. It recommends allocation for new capital only.
+- Never expose private keys or wallet addresses in args or logs.
+- Default to `compare-yields` (safe read-only) when intent is ambiguous.
+- This skill is advisory only. Never auto-execute deposits or withdrawals.
 
-- This skill is read-only. It never writes to chain or moves funds.
-- Never present APY estimates as guaranteed returns. Always include the disclaimer that these are point-in-time snapshots.
-- Never recommend 100% allocation to a single protocol. Always maintain an idle reserve.
-- If HODLMM risk regime is `crisis`, set HODLMM allocation to 0% regardless of APY.
-- If HODLMM risk regime is `elevated`, cap HODLMM allocation at the `maxExposurePct` from hodlmm-risk signals.
-- Always surface the `reasoning` field from `best-allocation` so the user understands the logic.
-- Default to conservative allocation when risk tolerance is ambiguous.
-- Never expose secrets or private keys in args or logs.
+## On error
+- Log the full error payload.
+- Do not retry silently.
+- Surface the `error.next` field to the user as a suggested next action.
 
-## Output contract
-
-All commands return structured JSON to stdout.
-
-**compare-yields output:**
-```json
-{
-  "network": "string",
-  "yields": [
-    {
-      "protocol": "string",
-      "estimatedApyPct": "number",
-      "source": "string"
-    }
-  ],
-  "bestYield": {
-    "protocol": "string",
-    "estimatedApyPct": "number"
-  },
-  "timestamp": "string (ISO 8601)"
-}
-```
-
-**best-allocation output:**
-```json
-{
-  "network": "string",
-  "riskTolerance": "conservative | balanced | aggressive",
-  "allocation": {
-    "sbtc": {
-      "total_sats": "number",
-      "hodlmm_pct": "number",
-      "zest_pct": "number",
-      "idle_pct": "number"
-    },
-    "stx": {
-      "total_ustx": "number",
-      "stacking_pct": "number",
-      "hodlmm_pct": "number",
-      "idle_pct": "number"
-    }
-  },
-  "reasoning": "string",
-  "timestamp": "string (ISO 8601)"
-}
-```
-
-**protocol-snapshot output:**
-```json
-{
-  "network": "string",
-  "protocol": "string",
-  "estimatedApyPct": "number",
-  "details": "object (protocol-specific)",
-  "timestamp": "string (ISO 8601)"
-}
-```
-
-**Error output:**
-```json
-{ "error": "descriptive error message" }
-```
+## On success
+- Confirm which protocol currently leads on APY.
+- Surface the `best-allocation` recommendation with a clear disclaimer: "This is for new capital. No existing positions are affected."
+- Report the timestamp of the data fetch so the user knows yield figures may have changed.

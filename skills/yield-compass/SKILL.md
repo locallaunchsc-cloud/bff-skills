@@ -1,169 +1,74 @@
 ---
 name: yield-compass
-description: "Cross-protocol yield compass — compares real-time APY across Bitflow HODLMM pools, Zest Protocol lending, and Stacks stacking to recommend optimal sBTC/STX allocation. Factors in HODLMM risk regime. Read-only; no wallet required."
+description: "Compares real-time APY across Bitflow HODLMM pools, Zest Protocol sBTC lending, and Stacks PoX stacking to surface the highest-yield allocation for idle sBTC and STX. Read-only, no wallet required."
 metadata:
   author: "locallaunchsc-cloud"
-  author-agent: "Yield Navigator"
+  author-agent: "LocalLaunch Agent"
   user-invocable: "false"
-  arguments: "compare-yields | best-allocation | protocol-snapshot"
+  arguments: "doctor | compare-yields | best-allocation | protocol-snapshot"
   entry: "yield-compass/yield-compass.ts"
   requires: ""
-  tags: "l2, defi, read-only, mainnet-only, hodlmm"
+  tags: "l2, defi, read-only, mainnet-only"
 ---
 
 # Yield Compass
 
 ## What it does
-Compares yield opportunities across three Stacks DeFi protocols in real time:
-1. **Bitflow HODLMM** — LP fee yield from concentrated liquidity pools
-2. **Zest Protocol** — sBTC lending supply APY
-3. **Stacks Stacking** — STX stacking rewards
-
-Returns a ranked list of yield sources with estimated APY and a recommended allocation split based on current risk regime (using hodlmm-risk volatility scoring).
+Fetches live APY data from Bitflow HODLMM pools (via the official Bitflow app API), Zest Protocol sBTC lending (via on-chain read-only contract call to pool-borrow-v2-3), and Stacks PoX stacking (via Hiro /v2/pox). Ranks protocols by yield and outputs a recommended allocation split for new capital.
 
 ## Why agents need it
-Agents holding idle sBTC or STX need to decide where capital works hardest. Today each protocol is a silo — an agent must call separate skills to check each. This skill does the comparison in one call, factors in risk regime from hodlmm-risk, and emits an allocation recommendation that downstream agents can execute.
+An agent managing idle sBTC or STX needs a single read-only command to know where yield is highest right now before committing to a supply, stake, or liquidity deposit.
 
 ## Safety notes
-- Read-only — never writes to chain or moves funds.
-- Mainnet only — Bitflow HODLMM and Zest APIs are mainnet-only.
-- No wallet or funds required.
-- APY estimates are point-in-time snapshots, not guaranteed returns.
-- Allocation recommendations are informational signals, not financial advice.
-- Pools with zero liquidity are excluded from comparison.
+- Read-only. No wallet required. No transactions are submitted.
+- Allocation output is a recommendation for new capital only. It does not instruct the agent to rebalance existing positions.
+- Mainnet only. Zest contracts and Bitflow pools are mainnet-deployed.
+- APY figures are point-in-time estimates. HODLMM pool APR fluctuates with fee activity.
 
 ## Commands
 
+### doctor
+Checks connectivity to all three data sources. Safe to run anytime.
+```bash
+bun run skills/yield-compass/yield-compass.ts doctor
+```
+
 ### compare-yields
-Compare current yield across all supported protocols.
-```
-bun run yield-compass/yield-compass.ts compare-yields
-```
-
-Options:
-- `--pool-ids` (optional) — Comma-separated HODLMM pool IDs to check (default: all active pools)
-
-Output:
-```json
-{
-  "network": "mainnet",
-  "yields": [
-    {
-      "protocol": "bitflow-hodlmm",
-      "poolId": "dlmm_3",
-      "pair": "sBTC/STX",
-      "estimatedApyPct": 12.4,
-      "riskRegime": "calm",
-      "volatilityScore": 22,
-      "source": "lp-fees"
-    },
-    {
-      "protocol": "zest",
-      "asset": "sBTC",
-      "estimatedApyPct": 3.8,
-      "utilizationPct": 72.5,
-      "source": "lending-interest"
-    },
-    {
-      "protocol": "stacking",
-      "asset": "STX",
-      "estimatedApyPct": 8.2,
-      "cycleLength": 2100,
-      "currentCycle": 94,
-      "source": "consensus-rewards"
-    }
-  ],
-  "bestYield": {
-    "protocol": "bitflow-hodlmm",
-    "estimatedApyPct": 12.4
-  },
-  "timestamp": "2026-03-27T20:00:00.000Z"
-}
+Fetches current APY from all three protocols and ranks them highest to lowest.
+```bash
+bun run skills/yield-compass/yield-compass.ts compare-yields
 ```
 
 ### best-allocation
-Recommend an allocation split based on yield and risk.
-```
-bun run yield-compass/yield-compass.ts best-allocation --amount-sbtc <sats> --amount-stx <ustx>
-```
-
-Options:
-- `--amount-sbtc` (optional) — sBTC amount in sats to allocate
-- `--amount-stx` (optional) — STX amount in microSTX to allocate
-- `--risk-tolerance` (optional) — "conservative" | "balanced" | "aggressive" (default: balanced)
-
-Output:
-```json
-{
-  "network": "mainnet",
-  "riskTolerance": "balanced",
-  "allocation": {
-    "sbtc": {
-      "total_sats": 500000,
-      "hodlmm_pct": 40,
-      "hodlmm_sats": 200000,
-      "hodlmm_pool": "dlmm_3",
-      "zest_pct": 35,
-      "zest_sats": 175000,
-      "idle_pct": 25,
-      "idle_sats": 125000
-    },
-    "stx": {
-      "total_ustx": 10000000,
-      "stacking_pct": 60,
-      "stacking_ustx": 6000000,
-      "hodlmm_pct": 25,
-      "hodlmm_ustx": 2500000,
-      "idle_pct": 15,
-      "idle_ustx": 1500000
-    }
-  },
-  "reasoning": "HODLMM regime is calm (score 22) — safe for LP exposure. Zest utilization at 72% suggests stable lending demand. Stacking offers reliable baseline yield.",
-  "timestamp": "2026-03-27T20:00:00.000Z"
-}
+Returns a recommended allocation split (percentages) for new capital based on current yields.
+```bash
+bun run skills/yield-compass/yield-compass.ts best-allocation
+bun run skills/yield-compass/yield-compass.ts best-allocation --capital-usd 1000
 ```
 
 ### protocol-snapshot
-Get a quick snapshot of a single protocol's yield.
-```
-bun run yield-compass/yield-compass.ts protocol-snapshot --protocol <name>
-```
-
-Options:
-- `--protocol` (required) — "hodlmm" | "zest" | "stacking"
-- `--pool-id` (optional) — Required for hodlmm, ignored for others
-
-Output:
-```json
-{
-  "network": "mainnet",
-  "protocol": "hodlmm",
-  "poolId": "dlmm_3",
-  "estimatedApyPct": 12.4,
-  "riskRegime": "calm",
-  "volatilityScore": 22,
-  "details": {
-    "feeRate": 0.003,
-    "volume24h": 45000,
-    "tvl": 890000
-  },
-  "timestamp": "2026-03-27T20:00:00.000Z"
-}
+Returns current yield data for a single protocol.
+```bash
+bun run skills/yield-compass/yield-compass.ts protocol-snapshot --protocol hodlmm
+bun run skills/yield-compass/yield-compass.ts protocol-snapshot --protocol zest
+bun run skills/yield-compass/yield-compass.ts protocol-snapshot --protocol stacking
 ```
 
 ## Output contract
-All outputs are flat JSON to stdout (no wrapper envelope).
-On error:
+All outputs are JSON to stdout.
+
+**Success:**
 ```json
-{ "error": "descriptive error message" }
+{ "status": "success", "action": "...", "data": {}, "error": null }
+```
+
+**Error:**
+```json
+{ "status": "error", "action": "...", "data": {}, "error": { "code": "...", "message": "...", "next": "..." } }
 ```
 
 ## Known constraints
-- Mainnet only — Bitflow HODLMM and Zest APIs do not exist on testnet.
-- No wallet required — all operations are read-only.
-- HODLMM APY is estimated from pool fee rate and 24h volume relative to TVL. Actual returns depend on position range and rebalancing.
-- Zest APY is derived from current supply rate and utilization.
-- Stacking APY uses the most recent completed cycle reward rate.
-- Allocation recommendations assume the agent can execute deposits across all protocols. If a protocol is unavailable, the allocation redistributes.
-- Risk regime from hodlmm-risk is factored into allocation: crisis regime sets HODLMM allocation to 0%.
-- This skill composes with hodlmm-risk — it reuses the same volatility scoring and regime classification internally.
+- Zest APY is derived from get-reserve-state on pool-borrow-v2-3 at SP2VCQJGH7PHP2DJK7Z0V48AGBHQAW3R3ZW1QF4N. If Zest upgrades contracts this address may need updating.
+- Stacking APY is estimated from current PoX cycle stacked_ustx and reward_cycle_length. It is an approximation, not a guarantee.
+- HODLMM APY uses apr24h (24-hour trailing APR) from the top pool by TVL.
+- All three fetches use AbortSignal.timeout(10000) for a 10s timeout each.
